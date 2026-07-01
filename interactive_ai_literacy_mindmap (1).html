@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Mindmap: AI & Media Literacy (Phase 1)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', 'Kanit', sans-serif;
+            background-color: #f8fafc;
+            margin: 0;
+            overflow: hidden; 
+        }
+        
+        #mindmap-container {
+            width: 100vw;
+            height: 100vh;
+            cursor: grab;
+        }
+        
+        #mindmap-container:active {
+            cursor: grabbing;
+        }
+
+        /* D3 CSS - Remove hardcoded colors to allow dynamic styling */
+        .node circle {
+            stroke-width: 3px;
+            transition: all 0.3s ease;
+        }
+
+        .node circle:hover {
+            stroke-width: 5px;
+            filter: brightness(0.95);
+        }
+
+        .node text {
+            font-size: 15px;
+            fill: #1e293b; 
+            pointer-events: none; 
+        }
+        
+        .node text.subtext {
+            font-size: 12px;
+            fill: #64748b; 
+        }
+
+        .link {
+            fill: none;
+            stroke-width: 2px;
+            opacity: 0.6;
+            transition: all 0.3s ease;
+        }
+        
+        #tooltip {
+            position: absolute;
+            opacity: 0;
+            background-color: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            pointer-events: none;
+            font-size: 13px;
+            max-width: 280px;
+            transition: opacity 0.2s;
+            z-index: 10;
+        }
+        
+        .emoji-icon {
+            font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Kanit:wght@300;400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <!-- Header / UI overlay -->
+    <div class="absolute top-0 left-0 right-0 p-4 z-10 flex flex-col md:flex-row justify-between items-start md:items-center pointer-events-none gap-4">
+        <div class="pointer-events-auto bg-white/95 backdrop-blur-sm p-4 rounded-xl shadow-lg border border-slate-200">
+            <h1 class="text-xl font-semibold text-slate-800 mb-1 flex items-center gap-2">
+                <span class="text-2xl">🧠</span> AI & Media Literacy Mindmap
+            </h1>
+            <p class="text-sm text-slate-600 mb-2">โครงสร้างความรู้: การรู้เท่าทันสื่อและปัญญาประดิษฐ์</p>
+            <div class="flex gap-3 text-xs text-slate-500 font-medium">
+                <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span> บริบทความสำคัญ</span>
+                <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-orange-500 inline-block"></span> โครงสร้างแนวคิด</span>
+                <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-purple-500 inline-block"></span> การประเมิน</span>
+            </div>
+            <p class="text-xs text-slate-400 mt-2 italic">คลิกโหนดเพื่อเปิด/ปิด • ลากเพื่อเลื่อน • ซูมเข้า/ออกได้</p>
+        </div>
+        <button id="reset-btn" class="pointer-events-auto bg-slate-800 hover:bg-slate-900 text-white px-5 py-2.5 rounded-lg shadow-lg transition-colors text-sm font-medium flex items-center gap-2">
+            <span>🎯</span> จัดกึ่งกลาง (Reset View)
+        </button>
+    </div>
+
+    <!-- Tooltip Element -->
+    <div id="tooltip"></div>
+
+    <!-- Canvas Container -->
+    <div id="mindmap-container"></div>
+
+    <script>
+        // Data Structure with Icons and Colors for Phase 1
+        const mindmapData = {
+            name: "AI & Media Literacy",
+            englishName: "การรู้เท่าทัน AI และสื่อ",
+            icon: "🧠",
+            color: "#3b82f6", // Blue for Root
+            description: "จุดศูนย์กลางของการเรียนรู้ความสัมพันธ์ระหว่างปัญญาประดิษฐ์และสื่อ",
+            children: [
+                {
+                    name: "บริบทความสำคัญ",
+                    englishName: "Importance Context",
+                    icon: "🌍",
+                    color: "#10b981", // Tailwind Emerald 500
+                    description: "เหตุผลและสภาพแวดล้อมที่ทำให้เรื่องนี้มีความสำคัญในยุคปัจจุบัน",
+                    children: [
+                        { name: "AI ในชีวิตประจำวัน", englishName: "Everyday AI Presence", icon: "🤖" },
+                        { name: "โอกาสและประโยชน์", englishName: "Opportunities", icon: "🌟" },
+                        { name: "ความเสี่ยงและความท้าทาย", englishName: "Risks Challenges", icon: "⚠️" },
+                        { name: "การเชื่อมโยงการรู้เท่าทัน", englishName: "Literacy Interdependence", icon: "🔗" }
+                    ]
+                },
+                {
+                    name: "โครงสร้างกรอบแนวคิด",
+                    englishName: "Framework Structures",
+                    icon: "🏗️",
+                    color: "#f97316", // Tailwind Orange 500
+                    description: "ประกอบด้วย 2 กรอบหลักที่ใช้เป็นฐานคิด คือ AILF และ MAIL",
+                    children: [
+                        {
+                            name: "กรอบแนวคิด AILF",
+                            englishName: "AILF Components",
+                            icon: "📚",
+                            children: [
+                                {
+                                    name: "ขอบเขตความรู้",
+                                    englishName: "Knowledge Areas",
+                                    icon: "📖",
+                                    children: [
+                                        { name: "ธรรมชาติของ AI", englishName: "AI Nature", icon: "🧬" },
+                                        { name: "ข้อมูลสำหรับฝึกสอน", englishName: "Training Data", icon: "📊" },
+                                        { name: "ขีดความสามารถ/ข้อจำกัด", englishName: "Capabilities Limits", icon: "🚧" }
+                                    ]
+                                },
+                                {
+                                    name: "ชุดทักษะ",
+                                    englishName: "Skills Set",
+                                    icon: "🛠️",
+                                    children: [
+                                        { name: "การคิดเชิงวิพากษ์", englishName: "Critical Thinking", icon: "🤔" },
+                                        { name: "การทำงานร่วมกับ AI", englishName: "AI Collaboration", icon: "🤝" },
+                                        { name: "การใช้อย่างสร้างสรรค์", englishName: "Creative Use", icon: "🎨" }
+                                    ]
+                                },
+                                {
+                                    name: "ทัศนคติของผู้เรียน",
+                                    englishName: "Learner Attitudes",
+                                    icon: "❤️",
+                                    children: [
+                                        { name: "ไตร่ตรองและรับผิดชอบ", englishName: "Reflective Responsible", icon: "🧘" },
+                                        { name: "อยากรู้อยากเห็น/นวัตกรรม", englishName: "Curious Innovative", icon: "✨" },
+                                        { name: "ปรับตัวและเห็นอกเห็นใจ", englishName: "Adaptable Empathetic", icon: "🌱" }
+                                    ]
+                                },
+                                {
+                                    name: "4 โดเมนหลัก",
+                                    englishName: "Four Domains",
+                                    icon: "🎓",
+                                    children: [
+                                        { name: "มีส่วนร่วมกับ AI", englishName: "Engage AI", icon: "💬" },
+                                        { name: "สร้าง AI", englishName: "Create AI", icon: "🔨" },
+                                        { name: "จัดการ AI", englishName: "Manage AI", icon: "⚙️" },
+                                        { name: "กำหนดทิศทาง AI", englishName: "Shape AI", icon: "🧭" }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            name: "กรอบแนวคิด MAIL",
+                            englishName: "MAIL Framework",
+                            icon: "📁",
+                            children: [
+                                {
+                                    name: "มิติของแนวคิด",
+                                    englishName: "Concept Dimensions",
+                                    icon: "📐",
+                                    children: [
+                                        { name: "ผู้สร้างและผู้รับสาร", englishName: "Authors Audiences", icon: "👥" },
+                                        { name: "ข้อความและความหมาย", englishName: "Messages Meanings", icon: "✉️" },
+                                        { name: "การนำเสนอและความเป็นจริง", englishName: "Representations Realities", icon: "🎭" }
+                                    ]
+                                },
+                                {
+                                    name: "สมรรถนะ MAIL",
+                                    englishName: "MAIL Competences",
+                                    icon: "🏆",
+                                    children: [
+                                        { name: "การเข้าถึงและการใช้งาน", englishName: "Access Use", icon: "🔑" },
+                                        { name: "การวิเคราะห์และประเมิน", englishName: "Analyse Evaluate", icon: "🔍" },
+                                        { name: "การมีส่วนร่วม/ทำงานร่วมกัน", englishName: "Participate Collaborate", icon: "🤝" },
+                                        { name: "การสร้างสรรค์", englishName: "Create", icon: "🪄" },
+                                        { name: "การไตร่ตรอง/มีจริยธรรม", englishName: "Reflect Act Ethically", icon: "⚖️" }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    name: "บทบาทและการประเมิน",
+                    englishName: "Assessment Roles",
+                    icon: "🎯",
+                    color: "#a855f7", // Tailwind Purple 500
+                    description: "การนำความรู้ไปประยุกต์ใช้ในการศึกษาและการวัดประเมินผล",
+                    children: [
+                        {
+                            name: "การออกแบบการประเมิน",
+                            englishName: "Assessment Design",
+                            icon: "📝",
+                            children: [
+                                { name: "ประเภทของงาน", englishName: "Task Types", icon: "📋" },
+                                { name: "บริบทของงาน", englishName: "Task Contexts", icon: "🏢" },
+                                { name: "ตัวอย่างงาน", englishName: "Example Task", icon: "💡" }
+                            ]
+                        },
+                        {
+                            name: "บทบาททางการศึกษา",
+                            englishName: "Education Roles",
+                            icon: "🏫",
+                            children: [
+                                { name: "บทบาทของครู", englishName: "Teachers Role", icon: "👩‍🏫" },
+                                { name: "ผู้นำระบบ", englishName: "System Leaders", icon: "👔" },
+                                { name: "ผู้ออกแบบนโยบาย", englishName: "Policy Designers", icon: "⚖️" },
+                                { name: "ครอบครัวและชุมชน", englishName: "Families Support", icon: "👨‍👩‍👧‍👦" }
+                            ]
+                        },
+                        { name: "การประยุกต์ใช้ข้ามรายวิชา", englishName: "Cross Subject Use", icon: "🔄" }
+                    ]
+                }
+            ]
+        };
+
+        // Set up SVG dimensions
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        
+        // Setup Zoom behavior
+        const zoom = d3.zoom()
+            .scaleExtent([0.1, 3])
+            .on("zoom", (event) => {
+                svgGroup.attr("transform", event.transform);
+            });
+
+        // Create the SVG container
+        const svg = d3.select("#mindmap-container").append("svg")
+            .attr("width", width)
+            .attr("height", height)
+            .call(zoom)
+            .on("dblclick.zoom", null); 
+            
+        // Group for holding the visual elements
+        const svgGroup = svg.append("g");
+
+        // Tooltip setup
+        const tooltip = d3.select("#tooltip");
+
+        // Create the tree layout
+        const treemap = d3.tree().nodeSize([65, 320]); 
+
+        let root;
+        let i = 0;
+        const duration = 750;
+
+        // Function to convert hex color to rgba for light backgrounds
+        function hexToRgba(hex, opacity) {
+            let r = parseInt(hex.slice(1, 3), 16),
+                g = parseInt(hex.slice(3, 5), 16),
+                b = parseInt(hex.slice(5, 7), 16);
+            return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+        }
+
+        function update(source) {
+            const treeData = treemap(root);
+            const nodes = treeData.descendants();
+            const links = treeData.descendants().slice(1);
+
+            // Normalize for fixed-depth (horizontal spacing)
+            nodes.forEach(d => { d.y = d.depth * 340; });
+
+            // ****************** Nodes section ***************************
+            const node = svgGroup.selectAll('g.node')
+                .data(nodes, d => d.id || (d.id = ++i));
+
+            const nodeEnter = node.enter().append('g')
+                .attr('class', 'node')
+                .attr("transform", d => `translate(${source.y0},${source.x0})`)
+                .on('click', click)
+                .on('mouseover', showTooltip)
+                .on('mouseout', hideTooltip);
+
+            // Add Circle for the nodes
+            nodeEnter.append('circle')
+                .attr('class', 'node')
+                .attr('r', 1e-6)
+                .style("stroke", d => d.color);
+
+            // Add Text Label (Icon + Thai Name)
+            nodeEnter.append('text')
+                .attr("dy", "-.35em")
+                .attr("x", d => d.children || d._children ? -15 : 15)
+                .attr("text-anchor", d => d.children || d._children ? "end" : "start")
+                .html(d => `<tspan class="emoji-icon">${d.data.icon ? d.data.icon + " " : ""}</tspan>${d.data.name}`)
+                .style("font-weight", d => d.depth === 0 ? "600" : "500");
+
+            // Add Subtext (English Name)
+            nodeEnter.append('text')
+                .attr("class", "subtext")
+                .attr("dy", "1em")
+                .attr("x", d => d.children || d._children ? -15 : 15)
+                .attr("text-anchor", d => d.children || d._children ? "end" : "start")
+                .text(d => d.data.englishName ? d.data.englishName : "");
+
+            // UPDATE nodes
+            const nodeUpdate = nodeEnter.merge(node);
+
+            nodeUpdate.transition()
+                .duration(duration)
+                .attr("transform", d => `translate(${d.y},${d.x})`);
+
+            // Styling circles based on state and colors
+            nodeUpdate.select('circle.node')
+                .attr('r', d => {
+                    if (d.depth === 0) return 14; 
+                    if (!d.children && !d._children) return 7; // Leaf node smaller
+                    return 10; // Internal node
+                })
+                .style("fill", d => {
+                    if (!d.children && !d._children) return d.color; // Leaf: Solid color
+                    return d._children ? hexToRgba(d.color, 0.2) : "#fff"; // Collapsed: Light color, Expanded: White
+                })
+                .style("stroke", d => d.color)
+                .attr('cursor', d => (!d.children && !d._children) ? 'default' : 'pointer');
+
+            const nodeExit = node.exit().transition()
+                .duration(duration)
+                .attr("transform", d => `translate(${source.y},${source.x})`)
+                .remove();
+
+            nodeExit.select('circle').attr('r', 1e-6);
+            nodeExit.select('text').style('fill-opacity', 1e-6);
+
+            // ****************** links section ***************************
+            const link = svgGroup.selectAll('path.link')
+                .data(links, d => d.id);
+
+            const linkEnter = link.enter().insert('path', "g")
+                .attr("class", "link")
+                .style("stroke", d => d.color) // Link color matches target node
+                .attr('d', d => {
+                    const o = {x: source.x0, y: source.y0};
+                    return diagonal(o, o);
+                });
+
+            const linkUpdate = linkEnter.merge(link);
+
+            linkUpdate.transition()
+                .duration(duration)
+                .style("stroke", d => d.color)
+                .attr('d', d => diagonal(d, d.parent));
+
+            const linkExit = link.exit().transition()
+                .duration(duration)
+                .attr('d', d => {
+                    const o = {x: source.x, y: source.y};
+                    return diagonal(o, o);
+                })
+                .remove();
+
+            nodes.forEach(d => {
+                d.x0 = d.x;
+                d.y0 = d.y;
+            });
+        }
+
+        // Creates a curved (diagonal) path
+        function diagonal(s, d) {
+            return `M ${s.y} ${s.x}
+                    C ${(s.y + d.y) / 2} ${s.x},
+                      ${(s.y + d.y) / 2} ${d.x},
+                      ${d.y} ${d.x}`;
+        }
+
+        // Toggle children on click.
+        function click(event, d) {
+            if (!d.children && !d._children) return; 
+
+            if (d.children) {
+                d._children = d.children;
+                d.children = null;
+            } else {
+                d.children = d._children;
+                d._children = null;
+            }
+            update(d);
+            hideTooltip();
+        }
+
+        // Tooltip functions
+        function showTooltip(event, d) {
+            if(d.data.description) {
+                tooltip.transition().duration(200).style("opacity", 1);
+                tooltip.html(`
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="text-xl">${d.data.icon || ''}</span>
+                        <strong class="text-slate-800" style="color: ${d.color}">${d.data.name}</strong>
+                    </div>
+                    <p class="text-slate-600 mt-1">${d.data.description}</p>
+                `)
+                .style("left", (event.pageX + 20) + "px")
+                .style("top", (event.pageY - 20) + "px");
+            }
+        }
+
+        function hideTooltip() {
+            tooltip.transition().duration(500).style("opacity", 0);
+        }
+
+        // Initialize Hierarchy
+        root = d3.hierarchy(mindmapData, d => d.children);
+        root.x0 = height / 2;
+        root.y0 = 0;
+
+        // Propagate colors to children
+        root.each(d => {
+            if (d.depth === 0) {
+                d.color = d.data.color || "#3b82f6";
+            } else if (d.depth === 1) {
+                d.color = d.data.color;
+            } else {
+                d.color = d.parent.color; 
+            }
+        });
+
+        // Collapse all deep nodes initially
+        function collapse(d) {
+            if (d.children) {
+                d._children = d.children;
+                d._children.forEach(collapse);
+                d.children = null;
+            }
+        }
+
+        // Expand root and 1st level
+        if(root.children) {
+            root.children.forEach(child => {
+                 if(child.children) {
+                     child.children.forEach(collapse);
+                 }
+            });
+        }
+
+        update(root);
+
+        // Center function
+        function centerMindmap() {
+            const nodes = root.descendants();
+            let minX = Infinity, maxX = -Infinity;
+            let minY = Infinity, maxY = -Infinity;
+            
+            nodes.forEach(d => {
+                if (d.x < minX) minX = d.x;
+                if (d.x > maxX) maxX = d.x;
+                if (d.y < minY) minY = d.y;
+                if (d.y > maxY) maxY = d.y;
+            });
+            
+            const xOffset = height / 2;
+            const yOffset = window.innerWidth < 768 ? 50 : 150; 
+            
+            svg.transition()
+               .duration(750)
+               .call(zoom.transform, d3.zoomIdentity.translate(yOffset, xOffset).scale(0.85));
+        }
+
+        window.addEventListener('resize', () => {
+            svg.attr("width", window.innerWidth).attr("height", window.innerHeight);
+        });
+
+        document.getElementById('reset-btn').addEventListener('click', centerMindmap);
+
+        setTimeout(centerMindmap, 150);
+
+    </script>
+</body>
+</html>
