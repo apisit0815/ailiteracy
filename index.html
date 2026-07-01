@@ -281,7 +281,10 @@
             nodeEnter.append('circle')
                 .attr('class', 'node')
                 .attr('r', 1e-6)
-                .style("fill", d => d._children ? "#dbeafe" : "#fff"); // Light blue if collapsed
+                .style("fill", d => {
+                    if (!d.children && !d._children) return "#3b82f6"; // โหนดสุดท้าย: สีน้ำเงินทึบ
+                    return d._children ? "#dbeafe" : "#fff"; // โหนดภายใน
+                });
 
             // Add Main Text (Thai)
             nodeEnter.append('text')
@@ -309,9 +312,16 @@
 
             // Update the node attributes and style
             nodeUpdate.select('circle.node')
-                .attr('r', d => d.depth === 0 ? 12 : 8)
-                .style("fill", d => d._children ? "#dbeafe" : "#fff") // Light blue if collapsed
-                .attr('cursor', 'pointer');
+                .attr('r', d => {
+                    if (d.depth === 0) return 12; // โหนดหลัก (Root)
+                    if (!d.children && !d._children) return 6; // โหนดสุดท้าย (Leaf node) เล็กลงเล็กน้อย
+                    return 8; // โหนดภายใน (Internal nodes)
+                })
+                .style("fill", d => {
+                    if (!d.children && !d._children) return "#3b82f6"; // โหนดสุดท้าย: สีน้ำเงินทึบ
+                    return d._children ? "#dbeafe" : "#fff"; // โหนดภายใน: สีฟ้าอ่อนถ้าถูกพับอยู่
+                }) 
+                .attr('cursor', d => (!d.children && !d._children) ? 'default' : 'pointer');
 
             // Remove any exiting nodes
             const nodeExit = node.exit().transition()
@@ -376,6 +386,9 @@
 
         // Toggle children on click.
         function click(event, d) {
+            // ยกเลิกคำสั่งคลิกหากเป็นโหนดสุดท้าย (ไม่มีเนื้อหาให้เปิด/ปิด)
+            if (!d.children && !d._children) return; 
+
             if (d.children) {
                 d._children = d.children;
                 d.children = null;
